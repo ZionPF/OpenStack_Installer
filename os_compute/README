@@ -1,0 +1,10 @@
+Use different IP addresses when you configure eth0. Do not configure eth1 with a static IP address. The networking component of OpenStack assigns and configures an IP address.
+
+Synchronize from the controller node. Follow the instructions in the section called “Network Time Protocol (NTP)”.
+
+Change the 10.0.120.144 ip in nova.conf file to the ip of the current compute node. Make sure the controller node is reachable using hostname "controller"
+
+example hosts file:
+10.0.120.143 controller
+10.0.120.144 compute1
+
