@@ -28,7 +28,7 @@ rabbitmqctl change_password guest RABBIT_PASS
 
 echo "Installing Keystone"
 
-cp keystone.conf /etc/keystone/keystone.conf
+cp /keystone/keystone.conf /etc/keystone/keystone.conf
 
 mysql -u root -pMYSQL_PASS 'CREATE DATABASE keystone;'
 mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY
@@ -67,12 +67,18 @@ keystone endpoint-create \
         export OS_TENANT_NAME=admin
         export OS_AUTH_URL=http://controller:35357/v2.0
 
+echo "verify Keystone:"
+source openrc.sh
+keystone user-list
+
+read -p "Keystone working, Enter to continue."
+
 #Installs Glance
 
-cp glance-api.conf /etc/glance/glance-api.conf
-cp glance-registry.conf /etc/glance/glance-registry.conf
-cp glance-api-paste.ini /etc/glance/glance-api-paste.ini
-cp glance-api-registry.ini /etc/glance/glance-api-registry.ini
+cp glance/glance-api.conf /etc/glance/glance-api.conf
+cp glance/glance-registry.conf /etc/glance/glance-registry.conf
+cp glance/glance-api-paste.ini /etc/glance/glance-api-paste.ini
+cp glance/glance-api-registry.ini /etc/glance/glance-api-registry.ini
 rm /var/lib/glance/glance.sqlite
 
 mysql -u root -pMYSQL_PASS 'CREATE DATABASE glance;'
@@ -86,6 +92,83 @@ keystone user-role-add --user=glance --tenant=service --role=admin
 keystone service-create --name=glance --type=image --description="Glance Image Service"
 
 
+echo "Please paste the service ID above here and press enter:"
+read service_id
+
+keystone endpoint-create \
+  --service-id=$service_id \
+    --publicurl=http://controller:9292 \
+      --internalurl=http://controller:9292 \
+        --adminurl=http://controller:9292
+
+service glance-registry restart
+service glance-api restart
+
+mkdir ~/images
+wget -P ~/images http://cdn.download.cirros-cloud.net/0.3.1/cirros-0.3.1-x86_64-disk.img
+
+glance image-create --name="CirrOS 0.3.1" --disk-format=qcow2 \
+  --container-format=bare --is-public=true < ~/images/cirros-0.3.1-x86_64-disk.img
+
+glance image-list
+
+read -p "Glance working, Enter to continue."
+
+#Now install nova controller projects
+
+apt-get install nova-novncproxy novnc nova-api \
+  nova-ajax-console-proxy nova-cert nova-conductor \
+    nova-consoleauth nova-doc nova-scheduler \
+      python-novaclient
+
+apt-get install nova-network nova-api-metadata
+
+cp nova/nova.conf /etc/nova/
+cp nova/api-paste.ini /etc/nova/
+
+mysql -u root -pMYSQL_PASS 'CREATE DATABASE nova;'
+mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';'
+mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'%' IDENTIFIED BY 'NOVA_DBPASS';'
+
+nova-manage db sync
+
+keystone user-create --name=nova --pass=NOVA_PASS --email=nova@example.com
+keystone user-role-add --user=nova --tenant=service --role=admin
+keystone service-create --name=nova --type=compute \
+  --description="Nova Compute service"
+echo "Please paste the service ID above here and press enter:"
+read service_id
+
+keystone endpoint-create \
+  --service-id=$service_id \
+    --publicurl=http://controller:8774/v2/%\(tenant_id\)s \
+      --internalurl=http://controller:8774/v2/%\(tenant_id\)s \
+        --adminurl=http://controller:8774/v2/%\(tenant_id\)s
+
+service nova-api restart
+service nova-cert restart
+service nova-consoleauth restart
+service nova-scheduler restart
+service nova-conductor restart
+service nova-novncproxy restart
+service nova-network restart
+
+nova network-create vmnet --fixed-range-v4=10.0.0.0/24 \
+  --bridge-interface=br100 --multi-host=T
+
+nova image-list
+
+read -p "nova controller working, Enter to continue."
+
+#Dashboard
+apt-get install memcached libapache2-mod-wsgi openstack-dashboard
+apt-get remove --purge openstack-dashboard-ubuntu-theme
+cp openstack-dashboard/local_settings.py /etc/openstack-dashboard/local_settings.py
+
+service apache2 restart
+service memcached restart
+
+
 # This is where I got to, at the end, should output all the passwords
 
 echo "Your mysql password is: MYSQL_PASS"
@@ -94,7 +177,7 @@ echo "Your Rabbit MQ guest password is: RABBIT_PASS"
 
 echo "Your Admin password is: ADMIN_PASS"
 
-'
-'
-'
-'
+
+
+
+
