@@ -28,7 +28,7 @@ rabbitmqctl change_password guest RABBIT_PASS
 
 echo "Installing Keystone"
 
-cp /keystone/keystone.conf /etc/keystone/keystone.conf
+cp keystone/keystone.conf /etc/keystone/keystone.conf
 
 mysql -u root -pMYSQL_PASS 'CREATE DATABASE keystone;'
 mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY
@@ -47,8 +47,6 @@ keystone tenant-create --name=service --description="Service Tenant"
 keystone user-create --name=admin --pass=ADMIN_PASS --email=admin@example.com
 keystone role-create --name=admin
 keystone user-role-add --user=admin --tenant=admin --role=admin
-
-#Add the Keystone User, Tenant etc
 
 keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"
 
@@ -72,6 +70,9 @@ source openrc.sh
 keystone user-list
 
 read -p "Keystone working, Enter to continue."
+
+
+
 
 #Installs Glance
 
@@ -113,6 +114,9 @@ glance image-create --name="CirrOS 0.3.1" --disk-format=qcow2 \
 glance image-list
 
 read -p "Glance working, Enter to continue."
+
+
+
 
 #Now install nova controller projects
 
@@ -167,6 +171,49 @@ cp openstack-dashboard/local_settings.py /etc/openstack-dashboard/local_settings
 
 service apache2 restart
 service memcached restart
+
+
+
+#Block Storage
+
+apt-get install cinder-api cinder-scheduler
+cp cinder/cinder.conf /etc/cinder/cinder.conf
+cp cinder/api-paste.conf /etc/cinder/api-paste.conf
+
+mysql -u root -pMYSQL_PASS 'CREATE DATABASE cinder;'
+mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'CINDER_DBPASS';'
+mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'CINDER_DBPASS';'
+
+cinder-manage db sync
+keystone user-create --name=cinder --pass=CINDER_PASS --email=cinder@example.com
+keystone user-role-add --user=cinder --tenant=service --role=admin
+
+keystone service-create --name=cinder --type=volume \
+  --description="Cinder Volume Service"
+echo "Please paste the service ID above here and press enter:"
+read service_id
+
+keystone endpoint-create \
+  --service-id=$service_id \
+    --publicurl=http://controller:8776/v1/%\(tenant_id\)s \
+      --internalurl=http://controller:8776/v1/%\(tenant_id\)s \
+        --adminurl=http://controller:8776/v1/%\(tenant_id\)s
+
+keystone service-create --name=cinderv2 --type=volumev2 \
+  --description="Cinder Volume Service V2"
+echo "Please paste the service ID above here and press enter:"
+read service_id
+keystone endpoint-create \
+  --service-id=$service_id \
+    --publicurl=http://controller:8776/v2/%\(tenant_id\)s \
+      --internalurl=http://controller:8776/v2/%\(tenant_id\)s \
+        --adminurl=http://controller:8776/v2/%\(tenant_id\)s
+
+service cinder-scheduler restart
+service cinder-api restart
+
+
+
 
 
 # This is where I got to, at the end, should output all the passwords
