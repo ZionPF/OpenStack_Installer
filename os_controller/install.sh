@@ -1,46 +1,45 @@
-apt-get update
-apt-get upgrade -y
-apt-get install python-software-properties -y
-add-apt-repository cloud-archive:havana
-
-apt-get update
-apt-get dist-upgrade -y
-apt-get upgrade -y
-
-export DEBIAN_FRONTEND=noninteractive
-
-apt-get install -y ntp python-mysqldb mysql-server rabbitmq-server keystone python-novaclient python-neutronclient
-python-keystoneclient python-glanceclient python-swiftclient python-cinderclient python-heatclient
-python-ceilometerclient glance
-
-mysqladmin -u root password MYSQL_PASS
-
-read -p "in the next file, change the bind-address to the IP of your controller. Enter to continue."
-
-nano /etc/mysql/my.cnf
-
-
-service mysql restart
-mysql_install_db
-mysql_secure_installation
-
-rabbitmqctl change_password guest RABBIT_PASS
+#apt-get update
+#apt-get upgrade -y
+#apt-get install python-software-properties -y
+#add-apt-repository cloud-archive:havana
+#
+#apt-get update
+#apt-get dist-upgrade -y
+#apt-get upgrade -y
+#
+#export DEBIAN_FRONTEND=noninteractive
+#
+#apt-get install -y ntp python-mysqldb mysql-server rabbitmq-server python-novaclient python-neutronclient
+#python-keystoneclient python-glanceclient python-swiftclient python-cinderclient python-heatclient
+#python-ceilometerclient 
+#
+#mysqladmin -u root password MYSQL_PASS
+#
+#read -p "in the next file, change the bind-address to the IP of your controller. Enter to continue."
+#
+#nano /etc/mysql/my.cnf
+#
+#
+#service mysql restart
+#mysql_install_db
+#mysql_secure_installation
+#
+#rabbitmqctl change_password guest RABBIT_PASS
 
 echo "Installing Keystone"
 
+apt-get install -y keystone
 cp keystone/keystone.conf /etc/keystone/keystone.conf
 
-mysql -u root -pMYSQL_PASS 'CREATE DATABASE keystone;'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY
-'KEYSTONE_DBPASS';'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'KEYSTONE_DBPASS';'
-
+mysql -u root -pMYSQL_PASS -e "CREATE DATABASE keystone;"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' IDENTIFIED BY 'KEYSTONE_DBPASS';"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'%' IDENTIFIED BY 'KEYSTONE_DBPASS';"
 keystone-manage db_sync
 
 service keystone restart
 
-export OS_SERVICE_TOKEN=RABBIT_PASS
-export OS_SERVICE_TOKEN=http://controller:35357/v2.0
+export OS_SERVICE_TOKEN=ADMIN_TOKEN
+export OS_SERVICE_ENDPOINT=http://controller:35357/v2.0
 
 keystone tenant-create --name=admin --description="Admin Tenant"
 keystone tenant-create --name=service --description="Service Tenant"
@@ -66,7 +65,8 @@ keystone endpoint-create \
         export OS_AUTH_URL=http://controller:35357/v2.0
 
 echo "verify Keystone:"
-source openrc.sh
+
+source adminrc
 keystone user-list
 
 read -p "Keystone working, Enter to continue."
@@ -75,16 +75,14 @@ read -p "Keystone working, Enter to continue."
 
 
 #Installs Glance
-
-cp glance/glance-api.conf /etc/glance/glance-api.conf
-cp glance/glance-registry.conf /etc/glance/glance-registry.conf
-cp glance/glance-api-paste.ini /etc/glance/glance-api-paste.ini
-cp glance/glance-api-registry.ini /etc/glance/glance-api-registry.ini
+echo "Installing Glanceglance"
+apt-get install -y glance python-glanceclient
+cp glance/glance* /etc/glance
 rm /var/lib/glance/glance.sqlite
 
-mysql -u root -pMYSQL_PASS 'CREATE DATABASE glance;'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' IDENTIFIED BY 'GLANCE_DBPASS';'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'GLANCE_DBPASS';'
+mysql -u root -pMYSQL_PASS -e "CREATE DATABASE glance;"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' IDENTIFIED BY 'GLANCE_DBPASS';"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'GLANCE_DBPASS';"
 
 glance-manage db_sync
 
@@ -130,9 +128,9 @@ apt-get install nova-network nova-api-metadata
 cp nova/nova.conf /etc/nova/
 cp nova/api-paste.ini /etc/nova/
 
-mysql -u root -pMYSQL_PASS 'CREATE DATABASE nova;'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'%' IDENTIFIED BY 'NOVA_DBPASS';'
+mysql -u root -pMYSQL_PASS -e "CREATE DATABASE nova;"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'localhost' IDENTIFIED BY 'NOVA_DBPASS';"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON nova.* TO 'glance'@'%' IDENTIFIED BY 'NOVA_DBPASS';"
 
 nova-manage db sync
 
@@ -180,9 +178,9 @@ apt-get install cinder-api cinder-scheduler
 cp cinder/cinder.conf /etc/cinder/cinder.conf
 cp cinder/api-paste.conf /etc/cinder/api-paste.conf
 
-mysql -u root -pMYSQL_PASS 'CREATE DATABASE cinder;'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'CINDER_DBPASS';'
-mysql -u root -pMYSQL_PASS 'GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'CINDER_DBPASS';'
+mysql -u root -pMYSQL_PASS -e "CREATE DATABASE cinder;"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' IDENTIFIED BY 'CINDER_DBPASS';"
+mysql -u root -pMYSQL_PASS -e "GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' IDENTIFIED BY 'CINDER_DBPASS';"
 
 cinder-manage db sync
 keystone user-create --name=cinder --pass=CINDER_PASS --email=cinder@example.com
